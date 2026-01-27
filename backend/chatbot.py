@@ -184,7 +184,7 @@ Article Content:
 {text}
 """
     
-    final_summary_text = summarize_with_t5(content, max_length=250, custom_prompt=t5_prompt)
+    final_summary_text = summarize_with_t5(content, min_words=100, max_words=250, custom_prompt=t5_prompt)
 
     return {
         "summary": final_summary_text,

@@ -142,6 +142,21 @@ def read_news(
         if not all_news:
             return {"items": [], "total": 0, "page": page, "pages": 1}
 
+        # 0. Inject Views from Database
+        # Optimization: Only fetch views for links in current dataset (or all if dataset is small enough)
+        # For simplicity with sorting, we need views for ALL items first.
+        try:
+            analytics = db.query(NewsAnalytics).all()
+            views_map = {item.news_link: item.views for item in analytics}
+            
+            # Update all_news with views
+            for item in all_news:
+                item["views"] = views_map.get(item["link"], 0)
+        except Exception as e:
+            print(f"Error merging views: {e}")
+            # Continue without views if DB fails, defaulting to 0
+
+
         # 1. Apply Filters before sorting/pagination
         
         # Category Filter
@@ -150,14 +165,61 @@ def read_news(
             if cat_list:
                 all_news = [item for item in all_news if str(item.get("category") or "").lower() in cat_list]
 
-        # Stock/Watchlist Filter
+        # Stock/Watchlist Filter (Strict Headline Match)
         if stocks:
-            stock_list = [s.strip().lower() for s in stocks.split(",") if s.strip()]
-            if stock_list:
-                all_news = [
-                    item for item in all_news 
-                    if any(s in str(item.get("headline") or "").lower() or s in str(item.get("description") or "").lower() for s in stock_list)
-                ]
+            import re
+            requested_symbols = {s.strip().lower() for s in stocks.split(",") if s.strip()}
+            if requested_symbols:
+                # Build a set of keywords (Names, Aliases, Symbols) for the requested stocks
+                # Optimization: In a real app, this mapping should be pre-computed.
+                target_keywords = set()
+                
+                # Add the symbols themselves first
+                for s in requested_symbols:
+                    target_keywords.add(s)
+
+                # Look up rich data from NSE_STOCKS global
+                for stock_obj in NSE_STOCKS:
+                    if stock_obj.get('symbol', '').lower() in requested_symbols:
+                        # Add Company Name
+                        if stock_obj.get('name'):
+                            name_clean = stock_obj['name'].lower()
+                            # Filter out very short names if any (unlikely for full names)
+                            if len(name_clean) >= 3:
+                                target_keywords.add(name_clean)
+                        
+                        # Add Aliases (Strict Filtering)
+                        if stock_obj.get('aliases'):
+                            for alias in stock_obj['aliases']:
+                                alias_clean = alias.lower().strip()
+                                # Rule: Must be >= 3 chars OR contain a digit (e.g. "3m", "20m")
+                                if len(alias_clean) >= 3 or any(c.isdigit() for c in alias_clean):
+                                    target_keywords.add(alias_clean)
+                
+                # Strict Filter: Must appear in HEADLINE using WORD BOUNDARIES
+                if target_keywords:
+                    # Create a massive regex OR pattern: \b(term1|term2|term3)\b
+                    # Sort by length descending to match longest phrases first (though regex engine handles this, it's safer)
+                    sorted_keywords = sorted(target_keywords, key=len, reverse=True)
+                    escaped_keywords = [re.escape(k) for k in sorted_keywords]
+                    pattern_str = r'\b(' + '|'.join(escaped_keywords) + r')\b'
+                    
+                    try:
+                        regex = re.compile(pattern_str, re.IGNORECASE)
+                        
+                        final_news = []
+                        for item in all_news:
+                            headline = str(item.get("headline") or "")
+                            if regex.search(headline):
+                                final_news.append(item)
+                        
+                        all_news = final_news
+                    except Exception as e:
+                        print(f"Regex error: {e}")
+                        # Fallback to empty if regex fails
+                        all_news = []
+                else:
+                    all_news = []
 
         # Global Search
         if q:

@@ -243,12 +243,21 @@ function Dashboard({ onLogout, isAuthenticated, userName }) {
             };
 
             // Enhanced: Send personalization to backend
+            // Enhanced: Send personalization to backend
             if (dateFilter === 'for_me' && isAuthenticated) {
-                const userCategories = JSON.parse(localStorage.getItem('userCategories') || '[]');
-                if (userCategories.length > 0) {
-                    params.categories = userCategories.join(',');
+                // User Requirement: "If i have not added any stocks in the watchlist then it should be blank"
+                // strict check: if no stocks, don't fetch, just set empty.
+                if (!selectedStocks || selectedStocks.length === 0) {
+                    setNews([]);
+                    setTotalPages(1);
+                    setLoadingNews(false);
+                    return;
                 }
-                const stockSymbols = selectedStocks?.map(s => s.symbol).filter(Boolean).join(',');
+
+                // STRICT 'For Me' Logic (User Request):
+                // 1. Only show articles related to stocks in watchlist.
+                // 2. Ignore category preferences to ensure we don't miss news about the stock.
+                const stockSymbols = selectedStocks.map(s => s.symbol).filter(Boolean).join(',');
                 if (stockSymbols) {
                     params.stocks = stockSymbols;
                 }
@@ -367,20 +376,8 @@ function Dashboard({ onLogout, isAuthenticated, userName }) {
             const res = await axios.post(`${API_BASE}/news/summary`, { link: item.link });
             setArticleSummary(res.data.summary);
 
-            // Sync sentiment from AI analysis if available
-            if (res.data.sentiment && res.data.sentiment !== 'neutral') {
-                const newSentiment = res.data.sentiment;
-                // Update selected article state
-                setSelectedArticle(prev => ({
-                    ...prev,
-                    sentiment: newSentiment
-                }));
-
-                // Update news list so it persists in the grid
-                setNews(prev => prev.map(n =>
-                    n.link === item.link ? { ...n, sentiment: newSentiment } : n
-                ));
-            }
+            // Sync sentiment logic removed to maintain consistency (User Request)
+            // The sentiment will remains as originally calculated from the headline.
         } catch (err) {
             console.error("Error fetching summary:", err);
             setArticleSummary("Failed to generate summary. Please try reading the full article.");
@@ -607,7 +604,14 @@ function Dashboard({ onLogout, isAuthenticated, userName }) {
                         ].map(filter => (
                             <button
                                 key={filter.id}
-                                onClick={() => { setDateFilter(filter.id); setCurrentPage(1); }}
+                                onClick={() => {
+                                    if (dateFilter === filter.id) {
+                                        setDateFilter('all');
+                                    } else {
+                                        setDateFilter(filter.id);
+                                    }
+                                    setCurrentPage(1);
+                                }}
                                 className={`px-4 h-10 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${dateFilter === filter.id
                                     ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
                                     : 'text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-300 dark:hover:bg-white/5'
