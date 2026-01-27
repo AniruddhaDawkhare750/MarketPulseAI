@@ -261,10 +261,19 @@ function Dashboard({ onLogout, isAuthenticated, userName }) {
                 if (stockSymbols) {
                     params.stocks = stockSymbols;
                 }
-            } else if (dateFilter !== 'all' && dateFilter !== 'trending') {
-                params.filter_type = dateFilter;
-            } else if (dateFilter === 'trending') {
-                params.filter_type = 'trending';
+            } else {
+                // For General Feed (All Time, Trending, Time filters):
+                // Apply "Customize Feed" preferences if they exist.
+                const userCategories = JSON.parse(localStorage.getItem('userCategories') || '[]');
+                if (userCategories.length > 0) {
+                    params.categories = userCategories.join(',');
+                }
+
+                if (dateFilter !== 'all' && dateFilter !== 'trending') {
+                    params.filter_type = dateFilter;
+                } else if (dateFilter === 'trending') {
+                    params.filter_type = 'trending';
+                }
             }
 
             const res = await axios.get(`${API_BASE}/news`, { params });
