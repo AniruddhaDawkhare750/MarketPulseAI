@@ -1,77 +1,139 @@
 # MarketPulse AI
 
-**An intelligent financial news aggregation and analysis platform powered by AI**
+**An intelligent financial news aggregation and analysis platform powered by Local AI**
 
-MarketPulse AI is a comprehensive web application that aggregates real-time financial news from MoneyControl, performs sentiment analysis, provides AI-powered insights, and delivers personalized market intelligence to help users make informed investment decisions.
-
----
-## 🌟 Problem Statement
-- Investors waste time visiting multiple platforms and reading lengthy financial news to understand market impact.
-- MarketPulse AI automatically analyzes financial news using ML to classify sentiment as positive or negative in real time.
-- It presents market prices, news sentiment, and overall market direction on a single, easy-to-read dashboard for faster decisions.
+MarketPulse AI is a comprehensive web application that aggregates real-time financial news, performs sentiment analysis using FinBERT, uses local LLMs (Llama 3.2 via Ollama) for intelligent insights, and delivers personalized email notifications.
 
 ---
+
+## 🌟 How It Works: The "A to Z" Workflow
+
+### 1. Data Ingestion (The Scraper)
+*   **Source**: The system automatically scrapes financial news from **MoneyControl**.
+*   **Process**:
+    *   A background scraper runs periodically to fetch the latest news across 15+ categories (Economy, Stocks, IPOs, etc.).
+    *   It extracts headlines, images, timestamps, and full article content.
+    *   **Smart Caching**: Data is cached in `moneycontrol_news.json` to prevent excessive network calls and ensure fast load times.
+
+### 2. Intelligent Analysis (The AI Engine)
+Every piece of news goes through a multi-stage AI pipeline:
+*   **Sentiment Analysis (FinBERT)**:
+    *   As news is scraped, the **FinBERT** model (specialized for financial NLP) analyzes the headline and content.
+    *   It assigns a sentiment label (**Positive**, **Negative**, or **Neutral**) and a confidence score.
+*   **On-Demand Summarization (Llama 3.2)**:
+    *   When a user clicks "Summarize" on an article:
+        1.  The backend scrapes the specific article's full text.
+        2.  It sends a prompt to the local **Ollama** instance running **Llama 3.2**.
+        3.  The LLM generates a concise 100-word summary, stripping away noise, ads, and filler text.
+
+### 3. User Experience (The Frontend)
+*   **Real-Time Feed**: Users see a paginated feed of news, sorted by recency.
+*   **Filtering**:
+    *   **Category**: Filter by "IPO", "Banking", "Economy", etc.
+    *   **Watchlist ("For Me")**: A smart regex-based filter that only shows news relevant to stocks in the user's specific watchlist.
+*   **Interaction**:
+    *   **Ollama Chatbot**: A dedicated "Ask AI" chat interface where users can ask financial questions. The system prompt restricts the AI to **only** answer stock/finance-related queries, preventing hallucinations on non-relevant topics.
+
+### 4. Background Notification System
+*   **Scheduler**: A background job runs every **1 minute**.
+*   **Matching Logic**:
+    *   It loads the latest news and all user watchlists.
+    *   It performs a strict keyword match (Stock Symbol & Company Name) against the news content.
+    *   **Example**: If you have "RELIANCE" in your watchlist and a news headline says "Reliance Jio announces new tariff", the system flags it.
+*   **Delivery**:
+    *   It sends an effectively formatted **HTML Email** to the user using SMTP (Gmail).
+    *   The email includes the article title, sentiment color-coded (Green for Positive, Red for Negative), and a brief snippet.
+
+---
+
 ## 🌟 Key Features
 
-### 📰 Real-Time News Aggregation
-- Automated scraping of latest financial news from MoneyControl across 15+ categories
-- Coverage of Business, Markets, Economy, IPOs, Startups, Banking, and more
-- Smart caching with 5-minute refresh intervals for optimal performance
-- Parallel scraping for fast data retrieval
+### 🤖 Local AI & Ollama Integration
+This project prioritizes privacy and cost-efficiency by using local LLMs.
+*   **Engine**: **Ollama** (running locally on port 11434).
+*   **Model**: **Llama 3.2** (optimized for instructions and summarization).
+*   **Chatbot Guardrails**: The chatbot is engineered with a strict system prompt (`chatbot.py`) to declines non-financial queries (e.g., "tell me a joke") and strictly strictly adheres to financial context.
 
-### 🤖 AI-Powered Analysis
-- **Sentiment Analysis**: FinBERT-based sentiment scoring for every article (positive/negative/neutral)
-- **AI Summarization**: Local **Llama 3.2** model (via Ollama) with advanced post-processing and anti-hallucination filters
-- **Intelligent Chatbot**: Local **Llama 3.2** (via Ollama) with strict financial context guardrails
-- **Trend Detection**: Identifies trending news based on engagement metrics
+### 📧 Smart Email Notifications
+Never miss a market-moving update.
+*   **Duplicate Prevention**: The system tracks sent articles in the database to ensure you never get the same alert twice.
+*   **Rich Content**: Emails contain sentiment indicators and direct links to the source.
 
-### 📊 Market Data Integration
-- Real-time stock prices and market indices
-- Historical stock data with customizable time periods
-- Stock search across 1000+ NSE-listed companies
-- Interactive charts and visualizations using Recharts
-
-### 👤 Personalized Experience
-- User authentication and profile management
-- Custom watchlists for tracking favorite stocks
-- **Smart "For Me" Feed**: Strictly filters news for user's watchlist stocks using advanced regex and alias matching
-- Category-based news filtering (Economy, Stocks, Commodities, etc.)
-
-### 🔍 Advanced Search & Filtering
-- Global search across headlines, descriptions, and categories
-- Multi-category filtering
-- Stock-specific news filtering
-- Time-based filters (trending, weekly, etc.)
-- Pagination for efficient browsing
+### 📊 Frontend Experience (React + Vite)
+*   **Disclaimer Modal**: A "Welcome" modal ensures users understand the educational nature of the tool.
+*   **Dashboard**: A responsive grid layout featuring:
+    *   **Market Indices**: Real-time ticker.
+    *   **News Feed**: Infinite scroll/pagination.
+    *   **Stock Details**: Interactive charts using **Recharts**.
+*   **Dark Mode**: Native support for dark/light themes.
 
 ---
 
 ## 🏗️ Technology Stack
 
 ### Backend
-- **Framework**: FastAPI (Python)
-- **Database**: SQLite with SQLAlchemy ORM
-- **AI/ML**: 
-  - **Llama 3.2**: Local LLM for chatbot (via Ollama)
-
-  - **FinBERT**: Sentiment analysis
-- **Web Scraping**: BeautifulSoup4, Requests
-- **Market Data**: yfinance for real-time stock data
-- **Authentication**: Passlib with bcrypt for secure password hashing
+*   **Framework**: FastAPI (Python)
+*   **Database**: SQLite (with SQLAlchemy ORM)
+*   **AI/ML**:
+    *   **Ollama (Llama 3.2)**: Chat & Summarization.
+    *   **FinBERT**: Sentiment Analysis (Hugging Face).
+*   **Scheduling**: APScheduler (Background tasks).
+*   **Email**: SMTP (Google Mail).
 
 ### Frontend
-- **Framework**: React 19 with Vite
-- **Routing**: React Router DOM
-- **Styling**: Tailwind CSS 4
-- **Charts**: Recharts for data visualization
-- **Icons**: Lucide React
-- **HTTP Client**: Axios
-- **State Management**: React hooks
+*   **Framework**: React 19 (Vite).
+*   **Styling**: Tailwind CSS 4.
+*   **Visualization**: Recharts.
+*   **Icons**: Lucide React.
 
-### Development Tools
-- **Package Manager**: npm (frontend), pip (backend)
-- **Code Quality**: ESLint for linting
-- **Environment**: python-dotenv for configuration
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+1.  **Ollama**: Download from [ollama.com](https://ollama.com) and install.
+2.  **Pull Model**: Run `ollama pull llama3.2` in your terminal.
+3.  **Python 3.10+**
+4.  **Node.js 18+**
+
+### Installation
+
+#### 1. Backend Setup
+```bash
+cd backend
+
+# Create Virtual Environment
+python -m venv venv
+# Windows
+.\venv\Scripts\activate
+# Mac/Linux
+source venv/bin/activate
+
+# Install Dependencies
+pip install -r requirements.txt
+
+# Configure Environment
+# Create a .env file with your specific variables (see .env.example if available)
+# Required for Email:
+# SMTP_EMAIL=your_email@gmail.com
+# SMTP_PASSWORD=your_app_password
+
+# Run Server
+python main.py
+```
+*Server starts at `http://localhost:8000`*
+
+#### 2. Frontend Setup
+```bash
+cd frontend
+
+# Install Dependencies
+npm install
+
+# Run Development Server
+npm run dev
+```
+*App opens at `http://localhost:5173`*
 
 ---
 
@@ -80,258 +142,35 @@ MarketPulse AI is a comprehensive web application that aggregates real-time fina
 ```
 MarketPulseAI-main/
 ├── backend/
-│   ├── main.py                 # FastAPI application entry point
-│   ├── scraper.py              # News scraping engine
-│   ├── sentiment.py            # FinBERT sentiment analysis
-│   ├── chatbot.py              # Llama 3 (Ollama) chatbot integration
-│   ├── summarizer.py           # T5 summarization logic
-│   ├── market_data.py          # Stock data fetching
-│   ├── database.py             # Database models and operations
-│   ├── requirements.txt        # Python dependencies
-│   ├── .env                    # Environment variables
-│   ├── venv/                   # Python virtual environment
-│   └── moneycontrol_news.json  # Cached news data
+│   ├── main.py                 # API Entry Point & Scheduler
+│   ├── chatbot.py              # Ollama Integration & Prompts
+│   ├── notification_manager.py # Email Notification Logic
+│   ├── email_service.py        # SMTP Handling
+│   ├── scraper.py              # MoneyControl Scraper
+│   ├── sentiment.py            # FinBERT Model Loader
+│   └── database.py             # SQLite Models
 │
 ├── frontend/
 │   ├── src/
-│   │   ├── components/         # React components
-│   │   ├── pages/              # Page components
-│   │   ├── App.jsx             # Main application component
-│   │   └── main.jsx            # Application entry point
-│   ├── public/                 # Static assets
-│   ├── package.json            # Node dependencies
-│   ├── vite.config.js          # Vite configuration
-│   └── tailwind.config.js      # Tailwind CSS configuration
+│   │   ├── components/         # Reusable UI (Modals, Cards)
+│   │   ├── pages/              # Dashboard, StockDetails, Auth
+│   │   └── context/            # Global State
+│   └── public/                 # Assets
 │
-└── README.md                   # This file
+└── README.md
 ```
 
 ---
 
-## 🚀 Getting Started
-
-### Prerequisites
-- Python 3.11+
-- Node.js 20+
-- **Ollama**: Must be installed and running locally
-  - Pull Llama 3 model: `ollama pull llama3.2`
-
-### Backend Setup
-
-1. **Navigate to backend directory**
-   ```bash
-   cd backend
-   ```
-
-2. **Create and activate virtual environment**
-   ```bash
-   python -m venv venv
-   .\venv\Scripts\activate  # Windows
-   source venv/bin/activate  # Linux/Mac
-   ```
-
-3. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Run the backend server**
-   ```bash
-   python main.py
-   ```
-   Server will start at `http://localhost:8000`
-
-### Frontend Setup
-
-1. **Navigate to frontend directory**
-   ```bash
-   cd frontend
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Run the development server**
-   ```bash
-   npm run dev
-   ```
-   Application will open at `http://localhost:5173`
+## 🛡️ Disclaimer
+This application is for **educational purposes only**. The financial information provided by the AI models and sentiment analysis should not be taken as professional investment advice. Always do your own research.
 
 ---
 
-## 📡 API Endpoints
-
-### News
-- `GET /news` - Fetch paginated news with filtering options
-- `POST /news/view` - Increment article view count
-- `POST /news/summary` - Get AI-generated summary for an article
-
-### Market Data
-- `GET /market` - Get current market indices
-- `GET /stock/{symbol}` - Get detailed stock information
-- `GET /stock/{symbol}/history` - Get historical stock data
-- `GET /search-stocks` - Search for stocks by name or symbol
-
-### User Management
-- `POST /auth/signup` - Create new user account
-- `POST /auth/login` - User authentication
-- `GET /watchlist/{email}` - Get user's watchlist
-- `POST /watchlist` - Add stock to watchlist
-- `DELETE /watchlist/{email}/{symbol}` - Remove from watchlist
-
-### AI Features
-- `POST /chat` - Chat with AI financial assistant
-
----
-
-## 🎯 Use Cases
-
-1. **Individual Investors**: Stay updated with latest market news and sentiment analysis
-2. **Day Traders**: Quick access to trending news and real-time stock data
-3. **Financial Analysts**: AI-powered summaries for rapid information processing
-4. **Portfolio Managers**: Track watchlist stocks with personalized news feeds
-5. **Students & Researchers**: Learn about market trends with AI assistance
-
----
-
-## 🔐 Security Features
-
-- Secure password hashing with bcrypt
-- SQL injection prevention through SQLAlchemy ORM
-- CORS configuration for secure cross-origin requests
-- Environment-based API key management
-- Input validation and sanitization
-
----
-
-## 🎨 Features in Detail
-
-### News Scraping Engine
-- **Multi-threaded scraping**: Parallel processing of 15+ news categories
-- **Smart caching**: Reduces server load with intelligent cache management
-- **Deep metadata extraction**: Extracts images, timestamps, and full article content
-- **Duplicate detection**: Prevents duplicate articles in the database
-
-### Sentiment Analysis
-- **FinBERT model**: Specialized financial sentiment analysis
-- **Confidence scores**: Provides sentiment probability scores
-- **Real-time processing**: Analyzes sentiment during article scraping
-- **Cached results**: Stores sentiment for faster subsequent access
-
-### AI Chatbot
-- **Context-aware**: Understands financial terminology and market context
-- **Strict Guardrails**: Automatically declines non-financial queries to ensure relevance
-- **Markdown Formatting**: Renders responses with bolding, lists, and proper structure
-- **Local Privacy**: Runs entirely on your machine via Ollama
-
-### Smart Summarization
-- **Noise Filtering**: Aggressively strips ads, sidebars, and "Read More" links before processing
-- **Anti-Hallucination**: Custom filters to remove generated garbage, footer text, and pricing errors
-- **Beam Search**: High-quality generation with beam width of 4 for grammatical accuracy
-
----
-
-## 📈 Performance Optimizations
-
-- Background news scraping to avoid blocking API requests
-- In-memory caching for frequently accessed data
-- Lazy loading of AI models on server startup
-- Efficient database queries with proper indexing
-- Pagination for large datasets
-- Concurrent processing for parallel operations
-
----
-
-## 🛠️ Development
-
-### Running Tests
-```bash
-# Backend
-cd backend
-pytest
-
-# Frontend
-cd frontend
-npm run test
-```
-
-### Building for Production
-```bash
-# Frontend
-cd frontend
-npm run build
-
-# Backend (use production ASGI server)
-pip install gunicorn
-gunicorn main:app -w 4 -k uvicorn.workers.UvicornWorker
-```
-
----
-
-## 🐛 Known Issues & Limitations
-
-- News scraping limited to MoneyControl (can be extended to other sources)
-- Sentiment analysis requires GPU for optimal performance
-- API rate limits on free tier of Gemini AI
-- Historical data limited by yfinance API capabilities
-
----
-
-## 🔮 Future Enhancements
-
-- [ ] Multi-source news aggregation (Bloomberg, Reuters, etc.)
-- [ ] Advanced portfolio tracking and analytics
-- [x] Email alerts for watchlist stocks (Implemented v1)
-- [ ] SMS/WhatsApp integration
-- [ ] Mobile application (React Native)
-- [ ] Social sentiment analysis from Twitter/Reddit
-- [ ] Technical analysis indicators
-- [ ] Backtesting capabilities
-- [ ] Multi-language support
-
----
-
-## 📝 License
-
-This project is for educational and personal use. Please ensure compliance with MoneyControl's terms of service when scraping their content.
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit pull requests or open issues for bugs and feature requests.
-
----
-
-## 👨‍💻 Author
-
-**The MarketPulse AI Team**
-
-- **Prashant Gupta**
-- **Aniruddha Dawkhare**
-- **Yashodhan Agashe**
-- **Ayushi Punde**
-- **Rujali Nagbhidkar**
-- **Priyanka Mankar**
-
----
-
-## 🙏 Acknowledgments
-
-- MoneyControl for financial news data
-- Google Gemini AI for natural language processing
-- FinBERT team for sentiment analysis model
-- Yahoo Finance for market data API
-- Open source community for amazing tools and libraries
-
----
-
-## 📞 Support
-
-For questions or support, please open an issue in the repository.
-
----
-
-**Built with ❤️ for the financial community**
+## 👨‍💻 Team
+*   **Prashant Gupta**
+*   **Aniruddha Dawkhare**
+*   **Yashodhan Agashe**
+*   **Ayushi Punde**
+*   **Rujali Nagbhidkar**
+*   **Priyanka Mankar**
