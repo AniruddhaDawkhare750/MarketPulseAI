@@ -382,10 +382,14 @@ def scrape_article_content(url):
                     if isinstance(data, list):
                         for item in data:
                             if "articleBody" in item:
-                                return item["articleBody"]
+                                text = item["articleBody"]
+                                if len(text) > 100:
+                                    return text
                     elif isinstance(data, dict):
                         if "articleBody" in data:
-                            return data["articleBody"]
+                            text = data["articleBody"]
+                            if len(text) > 100:
+                                return text
                 except json.JSONDecodeError:
                     continue
         
