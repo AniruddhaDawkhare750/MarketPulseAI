@@ -6,7 +6,9 @@ import bcrypt
 import os
 from datetime import datetime
 
-DATABASE_URL = "sqlite:///./marketpulse.db"
+# Robust DB Path: Always look in the same directory as this file (backend/)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATABASE_URL = f"sqlite:///{os.path.join(BASE_DIR, 'marketpulse.db')}"
 
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

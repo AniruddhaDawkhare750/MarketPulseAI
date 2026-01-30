@@ -35,51 +35,81 @@ def fetch_quarterly_data(ticker_symbol):
     Returns textual chunks describing the results.
     """
     try:
-        # Resolve symbol (NSE default)
-        search_symbol = ticker_symbol
-        if not ticker_symbol.endswith(".NS") and not ticker_symbol.endswith(".BO"):
-             search_symbol = f"{ticker_symbol}.NS"
+        # Resolve symbol
+        search_symbol = ticker_symbol.strip()
              
         ticker = yf.Ticker(search_symbol)
-        
+        chunks = []
+
         # 1. Income Statement
         inc = ticker.quarterly_income_stmt
-        if inc.empty:
-            print(f"No income statement found for {search_symbol}")
-            return []
+        if not inc.empty:
+            # Get latest 2 quarters
+            latest_dates = inc.columns[:2]
             
-        # Get latest 2 quarters
-        latest_dates = inc.columns[:2]
-        
-        chunks = []
-        
-        for date in latest_dates:
-            date_str = date.strftime('%Y-%m-%d')
-            col = inc[date]
-            
-            revenue = col.get("Total Revenue", "N/A")
-            net_income = col.get("Net Income", "N/A")
-            ebitda = col.get("EBITDA", "N/A")
-            basic_eps = col.get("Basic EPS", "N/A")
-            
-            # Create a descriptive text chunk
-            chunk_text = (
-                f"Financial Results for {search_symbol} (Quarter ending {date_str}):\n"
-                f"- Total Revenue: {revenue}\n"
-                f"- Net Income: {net_income}\n"
-                f"- EBITDA: {ebitda}\n"
-                f"- Basic EPS: {basic_eps}\n"
-            )
-            
-            chunks.append({
-                "text": chunk_text,
-                "metadata": {
-                    "ticker": ticker_symbol,
-                    "date": date_str,
-                    "type": "income_statement"
-                },
-                "id": f"{ticker_symbol}_{date_str}_income"
-            })
+            for date in latest_dates:
+                date_str = date.strftime('%Y-%m-%d')
+                col = inc[date]
+                
+                revenue = col.get("Total Revenue", "N/A")
+                net_income = col.get("Net Income", "N/A")
+                ebitda = col.get("EBITDA", "N/A")
+                basic_eps = col.get("Basic EPS", "N/A")
+                
+                # Create a descriptive text chunk
+                chunk_text = (
+                    f"Financial Results for {search_symbol} (Quarter ending {date_str}):\n"
+                    f"- Total Revenue: {revenue}\n"
+                    f"- Net Income: {net_income}\n"
+                    f"- EBITDA: {ebitda}\n"
+                    f"- Basic EPS: {basic_eps}\n"
+                )
+                
+                chunks.append({
+                    "text": chunk_text,
+                    "metadata": {
+                        "ticker": ticker_symbol,
+                        "date": date_str,
+                        "type": "income_statement"
+                    },
+                    "id": f"{ticker_symbol}_{date_str}_income"
+                })
+
+        # 2. Recent Price History (Last 5 Days)
+        try:
+            hist = ticker.history(period="5d")
+            if not hist.empty:
+                # Iterate over the last 5 days (or fewer if less data)
+                # hist index is the Date
+                for date, row in hist.iterrows():
+                    date_str = date.strftime('%Y-%m-%d')
+                    close_price = round(row['Close'], 2)
+                    volume = int(row['Volume'])
+                    open_price = round(row['Open'], 2)
+                    high_price = round(row['High'], 2)
+                    low_price = round(row['Low'], 2)
+
+                    # Create a descriptive text chunk for Price
+                    price_chunk_text = (
+                        f"Stock Price for {search_symbol} on {date_str}:\n"
+                        f"- Closing Price: {close_price}\n"
+                        f"- Volume: {volume}\n"
+                        f"- Open: {open_price}\n"
+                        f"- High: {high_price}\n"
+                        f"- Low: {low_price}\n"
+                    )
+                    
+                    chunks.append({
+                        "text": price_chunk_text,
+                        "metadata": {
+                            "ticker": ticker_symbol,
+                            "date": date_str,
+                            "type": "stock_price"
+                        },
+                        "id": f"{ticker_symbol}_{date_str}_price"
+                    })
+        except Exception as e:
+            print(f"Error fetching price history for {ticker_symbol}: {e}")
             
         return chunks
 
@@ -127,16 +157,40 @@ def extract_ticker_from_query(query: str) -> str:
     """
     import requests
     import json
+    import re
+
+    # 1. High-Confidence Regex/Keyword Match (Prioritized over LLM)
+    query_upper = query.upper()
+    common_mappings = {
+        "TCS": "TCS.NS",
+        "RELIANCE": "RELIANCE.NS",
+        "INFY": "INFY.NS",
+        "HDFC": "HDFCBANK.NS",
+        "TATA MOTORS": "TATAMOTORS.NS",
+        "TATA STEEL": "TATASTEEL.NS",
+        "MORNINGSTAR": "MORN"
+    }
     
+    for key, value in common_mappings.items():
+        if key in query_upper:
+            print(f"Keyword Extraction: Found {key} -> {value}")
+            return value
+
+    # 2. LLM Extraction (Fallback for complex/unknown queries)
     system_prompt = (
-        "You are a financial entity extractor. Your ONLY job is to extract the likely NSE stock symbol from the user's query. "
-        "Append '.NS' to the symbol. If no specific company is mentioned, return 'NONE'. "
+        "You are an expert financial ticker extractor. Your goal is to identify the company in the user's query and return its stock ticker.\n"
+        "Rules:\n"
+        "1. Identify the company name (e.g., 'TCS', 'Reliance', 'Apple').\n"
+        "2. If it is an Indian company, append '.NS' (e.g., 'RELIANCE.NS', 'TCS.NS').\n"
+        "3. If it is a US company, return the standard ticker (e.g., 'AAPL', 'TSLA').\n"
+        "4. If uncertain or no company is mentioned, return 'NONE'.\n"
         "Examples:\n"
-        "- 'How is Reliance performing?' -> 'RELIANCE.NS'\n"
-        "- 'Tell me about Tata Motors results' -> 'TATAMOTORS.NS'\n"
-        "- 'What is the market looking like?' -> 'NONE'\n"
-        "- 'Dabur Q3 results' -> 'DABUR.NS'\n"
-        "Return ONLY the symbol string, no whitespace or punctuation."
+        "- 'TCS closing price' -> 'TCS.NS'\n"
+        "- 'Morningstar results' -> 'MORN'\n"
+        "- 'Apple news' -> 'AAPL'\n"
+        "- 'Reliance revenue' -> 'RELIANCE.NS'\n"
+        "- 'Tata Motors' -> 'TATAMOTORS.NS'\n"
+        "Return ONLY the symbol string."
     )
     
     try:
@@ -149,40 +203,145 @@ def extract_ticker_from_query(query: str) -> str:
                     {"role": "user", "content": query}
                 ],
                 "stream": False,
-                "options": {"temperature": 0} # Deterministic
+                "options": {"temperature": 0.1} # Deterministic
             },
-            timeout=5
+            timeout=10
         )
         if response.status_code == 200:
             symbol = response.json().get("message", {}).get("content", "").strip()
-            if symbol and symbol != "NONE" and "." in symbol: # Basic validation
-                return symbol
+            # Relaxed validation: Allow symbols without dots (US stocks)
+            if symbol and symbol != "NONE": 
+                # Cleanup: remove any trailing periods or whitespace
+                return symbol.strip(".")
     except Exception as e:
         print(f"Error extracting ticker: {e}")
         
+
+    
+
+
     return None
 
 def ensure_ticker_ingested(ticker: str):
     """
-    Checks if a ticker is present in the DB. If not, ingests it.
+    Checks if a ticker is present in the DB and if the data is fresh. 
+    If not found or stale (older than ~1 day), ingests it.
     """
     if not collection:
         return
 
-    # Check existence - simple query on metadata
-    # ChromaDB logic: if we can't find any documents for this ticker, ingest.
-    # Note: query() is semantic, get() is direct. Use get() for existence check.
-    existing = collection.get(
-        where={"ticker": ticker},
-        limit=1
-    )
-    
-    if existing and existing['ids']:
-        # Data exists, maybe implement TTL later, but for now skip
-        return
+    # 1. Check for recent price data
+    # We look for a 'stock_price' chunk with a recent date
+    try:
+        # Get today's date
+        today = datetime.datetime.now().date()
+        recent_cutoff = today - datetime.timedelta(days=2) # Allow max 2 days staleness (weekends)
+
+        # Query specifically for this ticker's price data
+        results = collection.get(
+            where={
+                "$and": [
+                    {"ticker": {"$eq": ticker}},
+                    {"type": {"$eq": "stock_price"}}
+                ]
+            },
+            include=["metadatas"] # We only need metadata to check dates
+        )
         
-    print(f"Ticker {ticker} not found in knowledge base. Auto-ingesting...")
-    ingest_financial_data([ticker])
+        is_fresh = False
+        if results and results['metadatas']:
+            # Check if any chunk has a date >= recent_cutoff
+            for meta in results['metadatas']:
+                 if not meta: continue # Safeguard against None
+                 
+                 chunk_date_str = meta.get("date")
+                 if chunk_date_str:
+                     try:
+                         # Dates are typically YYYY-MM-DD
+                         chunk_date = datetime.datetime.strptime(chunk_date_str, "%Y-%m-%d").date()
+                         if chunk_date >= recent_cutoff:
+                             is_fresh = True
+                             break
+                     except ValueError:
+                         continue
+        
+        if is_fresh:
+            # print(f"Data for {ticker} is fresh.")
+            return
+
+        print(f"Data for {ticker} is missing or stale. Fetching live data...")
+        ingest_financial_data([ticker])
+
+    except Exception as e:
+        print(f"Error checking freshness for {ticker}: {e}")
+        # Fallback: try ingest just in case
+        ingest_financial_data([ticker])
+
+def ingest_news_articles(news_items):
+    """
+    Ingests news articles into the vector database.
+    Each article is stored as a document with metadata.
+    """
+    if not collection:
+        print("Vector DB not initialized.")
+        return
+
+    # Filter valid items
+    valid_items = [item for item in news_items if item.get("full_content") or item.get("headline")]
+    
+    if not valid_items:
+        return
+
+    print(f"Ingesting {len(valid_items)} news articles into Vector DB...")
+    
+    ids = []
+    documents = []
+    metadatas = []
+    
+    for item in valid_items:
+        # Create a unique ID from the link
+        doc_id = item.get("link", "")
+        if not doc_id:
+            continue
+            
+        headline = item.get("headline", "No Title")
+        timestamp = item.get("timestamp", "Unknown Date")
+        content = item.get("full_content", "")
+        
+        # If content is empty/short, use description or headline
+        if not content:
+            content = item.get("description", headline)
+            
+        # Construct the text to embed
+        # We limit content to approx first 2000 chars to stay within reasonable embedding limits 
+        # (though model truncates, this saves network/processing if we were remote)
+        # Detailed format helping the LLM understand this is a News Article
+        doc_text = (
+            f"News Article: {headline}\n"
+            f"Date: {timestamp}\n"
+            f"Content: {content[:4000]}" 
+        )
+        
+        ids.append(doc_id)
+        documents.append(doc_text)
+        metadatas.append({
+            "type": "news",
+            "headline": headline,
+            "date": timestamp,
+            "link": doc_id
+        })
+        
+    if ids:
+        try:
+            # Batch upsert
+            collection.upsert(
+                ids=ids,
+                documents=documents,
+                metadatas=metadatas
+            )
+            print(f"Successfully ingested {len(ids)} news articles.")
+        except Exception as e:
+            print(f"Error ingesting news: {e}")
 
 
 # --- Retrieval Logic ---
@@ -200,13 +359,17 @@ def retrieve_context(query, k=3):
     
     # 1. Dynamic Step
     extracted_ticker = extract_ticker_from_query(query)
+    search_filter = None
+    
     if extracted_ticker:
         print(f"Identified Stock: {extracted_ticker}")
         ensure_ticker_ingested(extracted_ticker)
+        search_filter = {"ticker": extracted_ticker}
         
     results = collection.query(
         query_texts=[query],
-        n_results=k
+        n_results=5, # Increased k to capture price + financials
+        where=search_filter # Apply filter if ticker known
     )
     
     # Flatten results

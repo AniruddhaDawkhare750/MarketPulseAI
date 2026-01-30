@@ -64,8 +64,15 @@ def get_chat_response(query: str, context: str = "") -> str:
                 final_context = retrieved_context
 
         # If context is provided (e.g. from RAG in future), append it
+        # If context is provided (e.g. from RAG in future), append it
+        from datetime import datetime
+        current_date_str = datetime.now().strftime("%Y-%m-%d")
+        
+        system_context = f"Current Date: {current_date_str}\n"
         if final_context:
-            messages.insert(1, {"role": "system", "content": f"Context Information (Use this to answer):\n{final_context}"})
+            system_context += f"Context Information (Use this to answer):\n{final_context}"
+            
+        messages.insert(1, {"role": "system", "content": system_context})
 
         payload = {
             "model": OLLAMA_MODEL,

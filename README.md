@@ -39,11 +39,13 @@ Every piece of news goes through a multi-stage AI pipeline:
         3.  The LLM generates a concise 100-word summary, stripping away noise, ads, and filler text.
 *   **Dynamic Retrieval Augmented Generation (RAG)**:
     *   **Goal**: To answer factual questions about companies not in the model's training data.
-    *   **Self-Learning Workflow**:
-        1.  **Extraction**: The AI analyzes your query (e.g., "How did Dabur perform?") and identifies the ticker (`DABUR.NS`).
-        2.  **Check & Fetch**: It checks the local **ChromaDB** vector store. If data is missing, it dynamically fetches the latest quarterly financials using `yfinance`.
-        3.  **Ingest**: The data is chunked, embedded using `SentenceTransformers`, and stored for future use.
-        4.  **Answer**: The chatbot retrieves this "fresh" context to provide an accurate, number-backed answer.
+    *   **Self-Learning (Live Data Integration)**:
+        1.  **Extraction**: The AI analyzes your query (e.g., "How did Dabur perform?") and identifies the ticker (`DABUR.NS`). It prioritizes regex matching for accuracy.
+        2.  **Freshness Check**: It checks the local **ChromaDB** vector store. 
+            *   *Scenario A*: Data is fresh (ingested < 48 hours ago). It acts immediately.
+            *   *Scenario B*: Data is missing or stale. It **dynamically fetches** real-time price history and quarterly financials from **Yahoo Finance** on the fly.
+        3.  **Ingest**: The new data is chunked, embedded using `SentenceTransformers`, and stored for future use.
+        4.  **Answer**: The chatbot retrieves this "live" context to provide an accurate, number-backed answer (e.g., "Tata Steel closed at 145.20 yesterday").
 
 ### 3. User Experience (The Frontend)
 *   **Real-Time Feed**: Users see a paginated feed of news, sorted by recency.
@@ -100,6 +102,7 @@ Never miss a market-moving update.
         *   **Vector DB**: ChromaDB (Locally persistent).
         *   **Embeddings**: `sentence-transformers/all-MiniLM-L6-v2`.
         *   **Orchestration**: Custom Dynamic Ingestion Engine.
+        *   **External Data**: Yahoo Finance (`yfinance`) for real-time market data.
 *   **Scheduling**: APScheduler (Background tasks).
 *   **Email**: SMTP (Google Mail).
 
@@ -125,8 +128,10 @@ Never miss a market-moving update.
 ```bash
 cd backend
 
-# Create Virtual Environment
-python -m venv venv
+# Create Virtual Environment (Essential for preventing conflicts)
+python3 -m venv venv
+
+# Activate Virtual Environment
 # Windows
 .\venv\Scripts\activate
 # Mac/Linux
@@ -134,6 +139,8 @@ source venv/bin/activate
 
 # Install Dependencies
 pip install -r requirements.txt
+# Ensure key libraries are installed if requirements.txt is partial:
+pip install fastapi "uvicorn[standard]" chromadb sentence-transformers yfinance apscheduler requests beautifulsoup4 sqlalchemy bcrypt
 
 # Configure Environment
 # Create a .env file with your specific variables (see .env.example if available)
@@ -231,16 +238,16 @@ sequenceDiagram
     participant DB as ChromaDB
     participant YF as Yahoo Finance
 
-    User->>AI: "Tell me about Dabur results"
-    AI->>RAG: Extract Ticker ("DABUR.NS")
-    RAG->>DB: Check if data exists?
-    alt Data Missing
-        DB-->>RAG: No Data
-        RAG->>YF: Fetch Quarterly Financials
-        YF-->>RAG: Revenue, Net Income, etc.
+    User->>AI: "What is Tata Steel's price?"
+    AI->>RAG: Extract Ticker ("TATASTEEL.NS")
+    RAG->>DB: Check freshness (Is data > 2 days old?)
+    alt Data Stale or Missing
+        DB-->>RAG: Stale/None
+        RAG->>YF: Fetch Live Price History
+        YF-->>RAG: Last 5 days OHLCV
         RAG->>DB: Ingest (Chunk & Embed)
-    else Data Exists
-        DB-->>RAG: Metadata OK
+    else Data Fresh
+        DB-->>RAG: Data OK
     end
     
     RAG->>DB: Retrieve Context (Semantic Search)

@@ -8,9 +8,8 @@ import concurrent.futures
 import threading
 from sentiment import analyze_sentiment
 
-# CONFIG
-# CONFIG
-# Specific categories based on user request (Business & Markets)
+from rag_engine import ingest_news_articles
+
 # CONFIG
 # Specific categories based on user request (Business & Markets)
 CATEGORY_URLS = {
@@ -507,6 +506,9 @@ def background_scrape_and_save(existing_news):
                 # Keep only last 1000 items
                 filtered_news = filtered_news[:1000] 
                 save_news(filtered_news)
+                
+                # Ingest into Vector DB
+                ingest_news_articles(filtered_news)
                 
                 # Update in-memory cache
                 global NEWS_CACHE, LAST_SCRAPE_TIME
