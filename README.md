@@ -96,7 +96,7 @@ Never miss a market-moving update.
 *   **AI/ML**:
     *   **Ollama (Llama 3.2)**: Chat & Summarization.
     *   **FinBERT**: Sentiment Analysis (Hugging Face).
-    *   **RAG Pipeline**:
+    *   **Agentic RAG Pipeline**:
         *   **Vector DB**: ChromaDB (Locally persistent).
         *   **Embeddings**: `sentence-transformers/all-MiniLM-L6-v2`.
         *   **Orchestration**: Custom Dynamic Ingestion Engine.
@@ -205,7 +205,7 @@ graph TD
         API -->|Chat or Summary| AI_Engine["AI Engine (Ollama/Llama3)"]
         
         %% RAG Subsystem
-        AI_Engine <-->|Context Retrieval| RAG[Dynamic RAG Engine]
+        AI_Engine <-->|Context Retrieval| RAG[Agentic RAG Engine]
         RAG <-->|Store/Retrieve| VectorDB[(ChromaDB)]
         RAG -->|Dynamic Fetch| MarketData
         
@@ -226,13 +226,13 @@ graph TD
     Frontend -.->|Polls every 5s| API
 ```
 
-### 1. Dynamic RAG (Self-Learning) Flow
+### 1. Agentic RAG (Self-Healing) Flow
 
 ```mermaid
 sequenceDiagram
     participant User
     participant AI as AI Engine (Llama 3.2)
-    participant RAG as RAG Engine
+    participant RAG as Agentic RAG Engine
     participant DB as ChromaDB
     participant YF as Yahoo Finance
 
